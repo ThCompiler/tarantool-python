@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Drop Python 3.6 support (PR #327).
 
+### Fixed
+- Excessive idle CPU usage in `ConnectionPool` while waiting for
+  queued requests (PR #336).
+
 ## 1.2.0 - 2024-03-27
 
 ### Added
