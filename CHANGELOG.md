@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Drop Python 3.6 support (PR #327).
 
+### Fixed
+- Bump readthedocs build os version to ubuntu-24.04 (PR #336).
+  Ubuntu-20.04 is no longer supported.
+
 ## 1.2.0 - 2024-03-27
 
 ### Added
