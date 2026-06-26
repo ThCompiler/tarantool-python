@@ -59,6 +59,7 @@ from decimal import Decimal
 import msgpack
 
 from tarantool.error import MsgpackError, MsgpackWarning, warn
+from tarantool.utils import version_id
 
 EXT_ID = 1
 """
@@ -66,6 +67,38 @@ EXT_ID = 1
 """
 
 TARANTOOL_DECIMAL_MAX_DIGITS = 38
+TARANTOOL_DECIMAL_MAX_DIGITS_V35 = 76
+TARANTOOL_DECIMAL_76_DIGITS_VERSION = version_id(3, 5, 0)
+
+
+def get_tarantool_decimal_max_digits(tarantool_version=None):
+    """
+    Get max decimal precision supported by Tarantool version.
+
+    :param tarantool_version: Tarantool version identifier.
+    :type tarantool_version: :obj:`int`, optional
+
+    :rtype: :obj:`int`
+    """
+
+    if tarantool_version is not None \
+            and tarantool_version >= TARANTOOL_DECIMAL_76_DIGITS_VERSION:
+        return TARANTOOL_DECIMAL_MAX_DIGITS_V35
+
+    return TARANTOOL_DECIMAL_MAX_DIGITS
+
+
+def decimal_max_digits_errmsg(max_digits):
+    """
+    Build an error / warning message for max decimal precision.
+
+    :param max_digits: Max supported precision.
+    :type max_digits: :obj:`int`
+
+    :rtype: :obj:`str`
+    """
+
+    return f'Tarantool decimal supports a maximum of {max_digits} digits.'
 
 
 def get_mp_sign(sign):
@@ -114,7 +147,7 @@ def add_mp_digit(digit, bytes_reverted, digit_count):
         bytes_reverted.append(digit)
 
 
-def check_valid_tarantool_decimal(str_repr, scale, first_digit_ind):
+def check_valid_tarantool_decimal(str_repr, scale, first_digit_ind, tarantool_version=None):
     """
     Decimal numbers have 38 digits of precision, that is, the total
     number of digits before and after the decimal point can be 38. If
@@ -170,6 +203,9 @@ def check_valid_tarantool_decimal(str_repr, scale, first_digit_ind):
         representation.
     :type first_digit_ind: :obj:`int`
 
+    :param tarantool_version: Tarantool version identifier.
+    :type tarantool_version: :obj:`int`, optional
+
     :return: ``True``, if decimal can be encoded to Tarantool decimal
         without precision loss. ``False`` otherwise.
     :rtype: :obj:`bool`
@@ -179,31 +215,33 @@ def check_valid_tarantool_decimal(str_repr, scale, first_digit_ind):
     :meta private:
     """
 
+    max_digits = get_tarantool_decimal_max_digits(tarantool_version)
+
     if scale > 0:
         digit_count = len(str_repr) - 1 - first_digit_ind
     else:
         digit_count = len(str_repr) - first_digit_ind
 
-    if digit_count <= TARANTOOL_DECIMAL_MAX_DIGITS:
+    if digit_count <= max_digits:
         return True
 
-    if (digit_count - scale) > TARANTOOL_DECIMAL_MAX_DIGITS:
-        raise MsgpackError('Decimal cannot be encoded: Tarantool decimal '
-                           'supports a maximum of 38 digits.')
+    if (digit_count - scale) > max_digits:
+        raise MsgpackError('Decimal cannot be encoded: '
+                           + decimal_max_digits_errmsg(max_digits))
 
     starts_with_zero = str_repr[first_digit_ind] == '0'
 
-    if (digit_count > TARANTOOL_DECIMAL_MAX_DIGITS + 1) or \
-            (digit_count == TARANTOOL_DECIMAL_MAX_DIGITS + 1 and not starts_with_zero):
+    if (digit_count > max_digits + 1) or \
+            (digit_count == max_digits + 1 and not starts_with_zero):
         warn('Decimal encoded with loss of precision: '
-             'Tarantool decimal supports a maximum of 38 digits.',
+             + decimal_max_digits_errmsg(max_digits),
              MsgpackWarning)
         return False
 
     return True
 
 
-def strip_decimal_str(str_repr, scale, first_digit_ind):
+def strip_decimal_str(str_repr, scale, first_digit_ind, tarantool_version=None):
     """
     Strip decimal digits after the decimal point if decimal cannot be
     represented as Tarantool decimal without precision loss.
@@ -218,12 +256,17 @@ def strip_decimal_str(str_repr, scale, first_digit_ind):
         representation.
     :type first_digit_ind: :obj:`int`
 
+    :param tarantool_version: Tarantool version identifier.
+    :type tarantool_version: :obj:`int`, optional
+
     :meta private:
     """
 
+    max_digits = get_tarantool_decimal_max_digits(tarantool_version)
+
     assert scale > 0
     # Strip extra bytes
-    str_repr = str_repr[:TARANTOOL_DECIMAL_MAX_DIGITS + 1 + first_digit_ind]
+    str_repr = str_repr[:max_digits + 1 + first_digit_ind]
 
     str_repr = str_repr.rstrip('0')
     str_repr = str_repr.rstrip('.')
@@ -231,12 +274,15 @@ def strip_decimal_str(str_repr, scale, first_digit_ind):
     return str_repr
 
 
-def encode(obj, _):
+def encode(obj, _packer, tarantool_version=None):
     """
     Encode a decimal object.
 
     :param obj: Decimal to encode.
     :type obj: :obj:`decimal.Decimal`
+
+    :param tarantool_version: Tarantool version identifier.
+    :type tarantool_version: :obj:`int`, optional
 
     :return: Encoded decimal.
     :rtype: :obj:`bytes`
@@ -262,8 +308,8 @@ def encode(obj, _):
         sign = '+'
         first_digit_ind = 0
 
-    if not check_valid_tarantool_decimal(str_repr, scale, first_digit_ind):
-        str_repr = strip_decimal_str(str_repr, scale, first_digit_ind)
+    if not check_valid_tarantool_decimal(str_repr, scale, first_digit_ind, tarantool_version):
+        str_repr = strip_decimal_str(str_repr, scale, first_digit_ind, tarantool_version)
 
     bytes_reverted.append(get_mp_sign(sign))
 
@@ -342,7 +388,7 @@ def add_str_digit(digit, digits_reverted, scale):
     digits_reverted.append(str(digit))
 
 
-def decode(data, _):
+def decode(data, _unpacker, _tarantool_version):
     """
     Decode a decimal object.
 

@@ -112,7 +112,7 @@ def packer_factory(conn):
     # inside extension type packers.
     def default(obj):
         packer_no_ext = msgpack.Packer(**packer_kwargs)
-        return packer_default(obj, packer_no_ext)
+        return packer_default(obj, packer_no_ext, conn.version_id)
     packer_kwargs['default'] = default
 
     return msgpack.Packer(**packer_kwargs)

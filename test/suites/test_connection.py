@@ -113,7 +113,7 @@ class TestSuiteConnection(unittest.TestCase):
     def test_custom_unpacker(self):
         def my_ext_type_decoder(code, data):
             if code == ext_decimal.EXT_ID:
-                return ext_decimal.decode(data, None) - 1
+                return ext_decimal.decode(data, None, None) - 1
             raise NotImplementedError(f"Unknown msgpack extension type code {code}")
 
         def my_unpacker_factory(_):

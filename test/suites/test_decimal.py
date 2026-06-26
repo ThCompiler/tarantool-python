@@ -13,13 +13,20 @@ import tarantool
 from tarantool.error import MsgpackError, MsgpackWarning
 from tarantool.msgpack_ext.packer import default as packer_default
 from tarantool.msgpack_ext.unpacker import ext_hook as unpacker_ext_hook
+from tarantool.utils import version_id
 
 from .lib.tarantool_server import TarantoolServer
-from .lib.skip import skip_or_run_decimal_test
+from .lib.skip import (
+    skip_or_run_decimal_test,
+    skip_or_run_decimal_before_3_5_test,
+    skip_or_run_decimal_3_5_test,
+)
 from .utils import assert_admin_success
 
 
 class TestSuiteDecimal(unittest.TestCase):
+    decimal_v35_version_id = version_id(3, 5, 0)
+
     @classmethod
     def setUpClass(cls):
         print(' DECIMAL EXT TYPE '.center(70, '='), file=sys.stderr)
@@ -69,6 +76,22 @@ class TestSuiteDecimal(unittest.TestCase):
             return true
         """)
         assert_admin_success(resp)
+
+    def assert_decimal_tuple_equals(self, name, tarantool_decimal):
+        lua_eval = f"""
+            local tuple = box.space['test']:get('{name}')
+            assert(tuple ~= nil)
+
+            local dec = {tarantool_decimal}
+            if tuple[2] == dec then
+                return true
+            else
+                return nil, ('%s is not equal to expected %s'):format(
+                    tostring(tuple[2]), tostring(dec))
+            end
+        """
+
+        self.assertSequenceEqual(self.con.eval(lua_eval), [True])
 
     valid_cases = {
         'simple_decimal_1': {
@@ -172,58 +195,58 @@ class TestSuiteDecimal(unittest.TestCase):
             'tarantool': "decimal.new('0.001')",
         },
         'decimal_limits_1': {
-            'python': decimal.Decimal('11111111111111111111111111111111111111'),
+            'python': decimal.Decimal('1' * 38),
             'msgpack': (b'\x00\x01\x11\x11\x11\x11\x11\x11\x11\x11\x11'
                         b'\x11\x11\x11\x11\x11\x11\x11\x11\x11\x1c'),
-            'tarantool': "decimal.new('11111111111111111111111111111111111111')",
+            'tarantool': "decimal.new('" + '1' * 38 + "')",
         },
         'decimal_limits_2': {
-            'python': decimal.Decimal('-11111111111111111111111111111111111111'),
+            'python': decimal.Decimal('-' + '1' * 38),
             'msgpack': (b'\x00\x01\x11\x11\x11\x11\x11\x11\x11\x11\x11'
                         b'\x11\x11\x11\x11\x11\x11\x11\x11\x11\x1d'),
-            'tarantool': "decimal.new('-11111111111111111111111111111111111111')",
+            'tarantool': "decimal.new('-" + '1' * 38 + "')",
         },
         'decimal_limits_3': {
-            'python': decimal.Decimal('0.0000000000000000000000000000000000001'),
+            'python': decimal.Decimal('0.' + '0' * 36 + '1'),
             'msgpack': (b'\x25\x1c'),
-            'tarantool': "decimal.new('0.0000000000000000000000000000000000001')",
+            'tarantool': "decimal.new('0." + '0' * 36 + "1')",
         },
         'decimal_limits_4': {
-            'python': decimal.Decimal('-0.0000000000000000000000000000000000001'),
+            'python': decimal.Decimal('-0.' + '0' * 36 + '1'),
             'msgpack': (b'\x25\x1d'),
-            'tarantool': "decimal.new('-0.0000000000000000000000000000000000001')",
+            'tarantool': "decimal.new('-0." + '0' * 36 + "1')",
         },
         'decimal_limits_5': {
-            'python': decimal.Decimal('0.00000000000000000000000000000000000001'),
+            'python': decimal.Decimal('0.' + '0' * 37 + '1'),
             'msgpack': (b'\x26\x1c'),
-            'tarantool': "decimal.new('0.00000000000000000000000000000000000001')",
+            'tarantool': "decimal.new('0." + '0' * 37 + "1')",
         },
         'decimal_limits_6': {
-            'python': decimal.Decimal('-0.00000000000000000000000000000000000001'),
+            'python': decimal.Decimal('-0.' + '0' * 37 + '1'),
             'msgpack': (b'\x26\x1d'),
-            'tarantool': "decimal.new('-0.00000000000000000000000000000000000001')",
+            'tarantool': "decimal.new('-0." + '0' * 37 + "1')",
         },
         'decimal_limits_7': {
-            'python': decimal.Decimal('0.00000000000000000000000000000000000009'),
+            'python': decimal.Decimal('0.' + '0' * 37 + '9'),
             'msgpack': (b'\x26\x9c'),
-            'tarantool': "decimal.new('0.00000000000000000000000000000000000009')",
+            'tarantool': "decimal.new('0." + '0' * 37 + "9')",
         },
         'decimal_limits_8': {
-            'python': decimal.Decimal('0.00000000000000000000000000000000000009'),
+            'python': decimal.Decimal('0.' + '0' * 37 + '9'),
             'msgpack': (b'\x26\x9c'),
-            'tarantool': "decimal.new('0.00000000000000000000000000000000000009')",
+            'tarantool': "decimal.new('0." + '0' * 37 + "9')",
         },
         'decimal_limits_9': {
-            'python': decimal.Decimal('99999999999999999999999999999999999999'),
+            'python': decimal.Decimal('9' * 38),
             'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
                         b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x9c'),
-            'tarantool': "decimal.new('99999999999999999999999999999999999999')",
+            'tarantool': "decimal.new('" + '9' * 38 + "')",
         },
         'decimal_limits_10': {
-            'python': decimal.Decimal('-99999999999999999999999999999999999999'),
+            'python': decimal.Decimal('-' + '9' * 38),
             'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
                         b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x9d'),
-            'tarantool': "decimal.new('-99999999999999999999999999999999999999')",
+            'tarantool': "decimal.new('-" + '9' * 38 + "')",
         },
         'decimal_limits_11': {
             'python': decimal.Decimal('1234567891234567890.0987654321987654321'),
@@ -272,8 +295,108 @@ class TestSuiteDecimal(unittest.TestCase):
         },
     }
 
+    v35_valid_cases = {
+        'decimal_v35_limits_1': {
+            'python': decimal.Decimal('1' * 76),
+            'msgpack': (b'\x00\x01\x11\x11\x11\x11\x11\x11\x11\x11\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x1c'),
+            'tarantool': "decimal.new('" + '1' * 76 + "')",
+        },
+        'decimal_v35_limits_2': {
+            'python': decimal.Decimal('-' + '1' * 76),
+            'msgpack': (b'\x00\x01\x11\x11\x11\x11\x11\x11\x11\x11\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x1d'),
+            'tarantool': "decimal.new('-" + '1' * 76 + "')",
+        },
+        'decimal_v35_limits_3': {
+            'python': decimal.Decimal('9' * 76),
+            'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x9c'),
+            'tarantool': "decimal.new('" + '9' * 76 + "')",
+        },
+        'decimal_v35_limits_4': {
+            'python': decimal.Decimal('-' + '9' * 76),
+            'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x9d'),
+            'tarantool': "decimal.new('-" + '9' * 76 + "')",
+        },
+        'decimal_v35_limits_5': {
+            'python': decimal.Decimal('0.' + '0' * 75 + '1'),
+            'msgpack': (b'\x4c\x1c'),
+            'tarantool': "decimal.new('0." + '0' * 75 + "1')",
+        },
+        'decimal_v35_limits_6': {
+            'python': decimal.Decimal('-0.' + '0' * 75 + '1'),
+            'msgpack': (b'\x4c\x1d'),
+            'tarantool': "decimal.new('-0." + '0' * 75 + "1')",
+        },
+        'decimal_v35_limits_7': {
+            'python': decimal.Decimal('9' * 38 + '.' + '1' * 38),
+            'msgpack': (b'\x26\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x91\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x1c'),
+            'tarantool': "decimal.new('" + '9' * 38 + "." + '1' * 38 + "')",
+        },
+        'decimal_v35_limits_8': {
+            'python': decimal.Decimal('-' + '9' * 38 + '.' + '1' * 38),
+            'msgpack': (b'\x26\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x91\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11\x11'
+                        b'\x11\x11\x11\x11\x11\x11\x1d'),
+            'tarantool': "decimal.new('-" + '9' * 38 + "." + '1' * 38 + "')",
+        },
+        'decimal_v35_exponent_1': {
+            'python': decimal.Decimal('1e75'),
+            'msgpack': (b'\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x0c'),
+            'tarantool': "decimal.new('1e75')",
+        },
+        'decimal_v35_exponent_2': {
+            'python': decimal.Decimal('-1e75'),
+            'msgpack': (b'\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x0d'),
+            'tarantool': "decimal.new('-1e75')",
+        },
+        'decimal_v35_exponent_3': {
+            'python': decimal.Decimal('1e-75'),
+            'msgpack': (b'\x4b\x1c'),
+            'tarantool': "decimal.new('1e-75')",
+        },
+        'decimal_v35_exponent_4': {
+            'python': decimal.Decimal('1.2345e75'),
+            'msgpack': (b'\x00\x01\x23\x45\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                        b'\x00\x00\x00\x00\x00\x00\x0c'),
+            'tarantool': "decimal.new('1.2345e75')",
+        },
+        'decimal_v35_exponent_5': {
+            'python': decimal.Decimal('1.2345e-71'),
+            'msgpack': (b'\x4b\x12\x34\x5c'),
+            'tarantool': "decimal.new('1.2345e-71')",
+        },
+    }
+
     def test_msgpack_decode(self):
         for name, case in self.valid_cases.items():
+            with self.subTest(msg=name):
+                self.assertEqual(unpacker_ext_hook(1, case['msgpack']),
+                                 case['python'])
+
+        for name, case in self.v35_valid_cases.items():
             with self.subTest(msg=name):
                 self.assertEqual(unpacker_ext_hook(1, case['msgpack']),
                                  case['python'])
@@ -288,64 +411,92 @@ class TestSuiteDecimal(unittest.TestCase):
                     self.con.select('test', name),
                     [[name, case['python']]])
 
+    @skip_or_run_decimal_test
+    @skip_or_run_decimal_3_5_test
+    def test_tarantool_decode_v35(self):
+        for name, case in self.v35_valid_cases.items():
+            with self.subTest(msg=name):
+                self.adm(f"box.space['test']:replace{{'{name}', {case['tarantool']}}}")
+
+                self.assertSequenceEqual(
+                    self.con.select('test', name),
+                    [[name, case['python']]])
+
     def test_msgpack_encode(self):
         for name, case in self.valid_cases.items():
             with self.subTest(msg=name):
                 self.assertEqual(packer_default(case['python']),
                                  msgpack.ExtType(code=1, data=case['msgpack']))
 
+    def test_msgpack_encode_v35(self):
+        for name, case in self.v35_valid_cases.items():
+            with self.subTest(msg=name):
+                self.assertEqual(
+                    packer_default(case['python'],
+                                   tarantool_version=self.decimal_v35_version_id),
+                    msgpack.ExtType(code=1, data=case['msgpack']))
+
     @skip_or_run_decimal_test
     def test_tarantool_encode(self):
         for name, case in self.valid_cases.items():
             with self.subTest(msg=name):
                 self.con.insert('test', [name, case['python']])
+                self.assert_decimal_tuple_equals(name, case['tarantool'])
 
-                lua_eval = f"""
-                    local tuple = box.space['test']:get('{name}')
-                    assert(tuple ~= nil)
+    @skip_or_run_decimal_test
+    @skip_or_run_decimal_3_5_test
+    def test_tarantool_encode_v35(self):
+        for name, case in self.v35_valid_cases.items():
+            with self.subTest(msg=name):
+                self.con.insert('test', [name, case['python']])
+                self.assert_decimal_tuple_equals(name, case['tarantool'])
 
-                    local dec = {case['tarantool']}
-                    if tuple[2] == dec then
-                        return true
-                    else
-                        return nil, ('%s is not equal to expected %s'):format(
-                            tostring(tuple[2]), tostring(dec))
-                    end
-                """
-
-                self.assertSequenceEqual(self.con.eval(lua_eval), [True])
-
-    error_cases = {
+    legacy_error_cases = {
         'decimal_limit_break_head_1': {
-            'python': decimal.Decimal('999999999999999999999999999999999999999'),
+            'python': decimal.Decimal('9' * 39),
         },
         'decimal_limit_break_head_2': {
-            'python': decimal.Decimal('-999999999999999999999999999999999999999'),
+            'python': decimal.Decimal('-' + '9' * 39),
         },
         'decimal_limit_break_head_3': {
-            'python': decimal.Decimal('999999999999999999900000099999999999999999999'),
+            'python': decimal.Decimal('9' * 19 + '0' * 5 + '9' * 20),
         },
         'decimal_limit_break_head_4': {
-            'python': decimal.Decimal('-999999999999999999900000099999999999999999999'),
+            'python': decimal.Decimal('-' + '9' * 19 + '0' * 5 + '9' * 20),
         },
         'decimal_limit_break_head_5': {
-            'python': decimal.Decimal('100000000000000000000000000000000000000.1'),
+            'python': decimal.Decimal('1' + '0' * 38 + '.1'),
         },
         'decimal_limit_break_head_6': {
-            'python': decimal.Decimal('-100000000000000000000000000000000000000.1'),
+            'python': decimal.Decimal('-1' + '0' * 38 + '.1'),
         },
         'decimal_limit_break_head_7': {
-            'python': decimal.Decimal('1000000000000000000011110000000000000000000.1'),
+            'python': decimal.Decimal('1' + '0' * 18 + '1' * 4 + '0' * 19 + '.1'),
         },
         'decimal_limit_break_head_8': {
-            'python': decimal.Decimal('-1000000000000000000011110000000000000000000.1'),
+            'python': decimal.Decimal('-1' + '0' * 18 + '1' * 4 + '0' * 19 + '.1'),
         },
     }
 
-    def test_msgpack_encode_error(self):
+    v35_error_cases = {
+        'decimal_v35_limit_break_head_1': {
+            'python': decimal.Decimal('9' * 77),
+        },
+        'decimal_v35_limit_break_head_2': {
+            'python': decimal.Decimal('-' + '9' * 77),
+        },
+        'decimal_v35_limit_break_head_3': {
+            'python': decimal.Decimal('1' + '0' * 76 + '.1'),
+        },
+        'decimal_v35_limit_break_head_4': {
+            'python': decimal.Decimal('-1' + '0' * 76 + '.1'),
+        },
+    }
+
+    def test_msgpack_encode_legacy_error(self):
         # pylint: disable=cell-var-from-loop
 
-        for name, case in self.error_cases.items():
+        for name, case in self.legacy_error_cases.items():
             with self.subTest(msg=name):
                 msg = 'Decimal cannot be encoded: Tarantool decimal ' + \
                       'supports a maximum of 38 digits.'
@@ -353,11 +504,26 @@ class TestSuiteDecimal(unittest.TestCase):
                     MsgpackError, msg,
                     lambda: packer_default(case['python']))
 
-    @skip_or_run_decimal_test
-    def test_tarantool_encode_error(self):
+    def test_msgpack_encode_v35_error(self):
         # pylint: disable=cell-var-from-loop
 
-        for name, case in self.error_cases.items():
+        for name, case in self.v35_error_cases.items():
+            with self.subTest(msg=name):
+                msg = 'Decimal cannot be encoded: Tarantool decimal ' + \
+                      'supports a maximum of 76 digits.'
+                self.assertRaisesRegex(
+                    MsgpackError, msg,
+                    lambda: packer_default(
+                        case['python'],
+                        tarantool_version=self.decimal_v35_version_id,
+                    ))
+
+    @skip_or_run_decimal_test
+    @skip_or_run_decimal_before_3_5_test
+    def test_tarantool_encode_legacy_error(self):
+        # pylint: disable=cell-var-from-loop
+
+        for name, case in self.legacy_error_cases.items():
             with self.subTest(msg=name):
                 msg = 'Decimal cannot be encoded: Tarantool decimal ' + \
                       'supports a maximum of 38 digits.'
@@ -365,69 +531,119 @@ class TestSuiteDecimal(unittest.TestCase):
                     MsgpackError, msg,
                     lambda: self.con.insert('test', [name, case['python']]))
 
-    precision_loss_cases = {
+    @skip_or_run_decimal_test
+    @skip_or_run_decimal_3_5_test
+    def test_tarantool_encode_v35_error(self):
+        # pylint: disable=cell-var-from-loop
+
+        for name, case in self.v35_error_cases.items():
+            with self.subTest(msg=name):
+                msg = 'Decimal cannot be encoded: Tarantool decimal ' + \
+                      'supports a maximum of 76 digits.'
+                self.assertRaisesRegex(
+                    MsgpackError, msg,
+                    lambda: self.con.insert('test', [name, case['python']]))
+
+    legacy_precision_loss_cases = {
         'decimal_limit_break_tail_1': {
-            'python': decimal.Decimal('1.00000000000000000000000000000000000001'),
+            'python': decimal.Decimal('1.' + '0' * 37 + '1'),
             'msgpack': (b'\x00\x1c'),
             'tarantool': "decimal.new('1')",
         },
         'decimal_limit_break_tail_2': {
-            'python': decimal.Decimal('-1.00000000000000000000000000000000000001'),
+            'python': decimal.Decimal('-1.' + '0' * 37 + '1'),
             'msgpack': (b'\x00\x1d'),
             'tarantool': "decimal.new('-1')",
         },
         'decimal_limit_break_tail_3': {
-            'python': decimal.Decimal('0.000000000000000000000000000000000000001'),
+            'python': decimal.Decimal('0.' + '0' * 38 + '1'),
             'msgpack': (b'\x00\x0c'),
-            'tarantool': "decimal.new('0.000000000000000000000000000000000000001')",
+            'tarantool': "decimal.new('0." + '0' * 38 + "1')",
         },
         'decimal_limit_break_tail_4': {
-            'python': decimal.Decimal('-0.000000000000000000000000000000000000001'),
+            'python': decimal.Decimal('-0.' + '0' * 38 + '1'),
             'msgpack': (b'\x00\x0d'),
-            'tarantool': "decimal.new('-0.000000000000000000000000000000000000001')",
+            'tarantool': "decimal.new('-0." + '0' * 38 + "1')",
         },
         'decimal_limit_break_tail_5': {
-            'python': decimal.Decimal('9999999.99999900000000000000000000000000000000000001'),
+            'python': decimal.Decimal('9999999.999999' + '0' * 38 + '1'),
             'msgpack': (b'\x06\x99\x99\x99\x99\x99\x99\x9c'),
             'tarantool': "decimal.new('9999999.999999')",
         },
         'decimal_limit_break_tail_6': {
-            'python': decimal.Decimal('-9999999.99999900000000000000000000000000000000000001'),
+            'python': decimal.Decimal('-9999999.999999' + '0' * 38 + '1'),
             'msgpack': (b'\x06\x99\x99\x99\x99\x99\x99\x9d'),
             'tarantool': "decimal.new('-9999999.999999')",
         },
         'decimal_limit_break_tail_7': {
-            'python': decimal.Decimal('99999999999999999999999999999999999999.1'),
+            'python': decimal.Decimal('9' * 38 + '.1'),
             'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
                         b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x9c'),
-            'tarantool': "decimal.new('99999999999999999999999999999999999999')",
+            'tarantool': "decimal.new('" + '9' * 38 + "')",
         },
         'decimal_limit_break_tail_8': {
-            'python': decimal.Decimal('-99999999999999999999999999999999999999.1'),
+            'python': decimal.Decimal('-' + '9' * 38 + '.1'),
             'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
                         b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x9d'),
-            'tarantool': "decimal.new('-99999999999999999999999999999999999999')",
+            'tarantool': "decimal.new('-" + '9' * 38 + "')",
         },
         'decimal_limit_break_tail_9': {
-            'python': decimal.Decimal('99999999999999999999999999999999999999.11111111111111'
-                                      '11111111111'),
+            'python': decimal.Decimal('9' * 38 + '.' + '1' * 25),
             'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
                         b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x9c'),
-            'tarantool': "decimal.new('99999999999999999999999999999999999999')",
+            'tarantool': "decimal.new('" + '9' * 38 + "')",
         },
         'decimal_limit_break_tail_10': {
-            'python': decimal.Decimal('-99999999999999999999999999999999999999.11111111111111'
-                                      '11111111111'),
+            'python': decimal.Decimal('-' + '9' * 38 + '.' + '1' * 25),
             'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
                         b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x9d'),
-            'tarantool': "decimal.new('-99999999999999999999999999999999999999')",
+            'tarantool': "decimal.new('-" + '9' * 38 + "')",
         },
     }
 
-    def test_msgpack_encode_with_precision_loss(self):
+    v35_precision_loss_cases = {
+        'decimal_v35_limit_break_tail_1': {
+            'python': decimal.Decimal('1.' + '0' * 75 + '1'),
+            'msgpack': (b'\x00\x1c'),
+            'tarantool': "decimal.new('1')",
+        },
+        'decimal_v35_limit_break_tail_2': {
+            'python': decimal.Decimal('-1.' + '0' * 75 + '1'),
+            'msgpack': (b'\x00\x1d'),
+            'tarantool': "decimal.new('-1')",
+        },
+        'decimal_v35_limit_break_tail_3': {
+            'python': decimal.Decimal('0.' + '0' * 76 + '1'),
+            'msgpack': (b'\x00\x0c'),
+            'tarantool': "decimal.new('0')",
+        },
+        'decimal_v35_limit_break_tail_4': {
+            'python': decimal.Decimal('-0.' + '0' * 76 + '1'),
+            'msgpack': (b'\x00\x0d'),
+            'tarantool': "decimal.new('-0')",
+        },
+        'decimal_v35_limit_break_tail_5': {
+            'python': decimal.Decimal('9' * 76 + '.1'),
+            'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x9c'),
+            'tarantool': "decimal.new('" + '9' * 76 + "')",
+        },
+        'decimal_v35_limit_break_tail_6': {
+            'python': decimal.Decimal('-' + '9' * 76 + '.1'),
+            'msgpack': (b'\x00\x09\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99'
+                        b'\x99\x99\x99\x99\x99\x99\x9d'),
+            'tarantool': "decimal.new('-" + '9' * 76 + "')",
+        },
+    }
+
+    def test_msgpack_encode_with_legacy_precision_loss(self):
         # pylint: disable=cell-var-from-loop
 
-        for name, case in self.precision_loss_cases.items():
+        for name, case in self.legacy_precision_loss_cases.items():
             with self.subTest(msg=name):
                 msg = 'Decimal encoded with loss of precision: ' + \
                       'Tarantool decimal supports a maximum of 38 digits.'
@@ -440,11 +656,31 @@ class TestSuiteDecimal(unittest.TestCase):
                     )
                 )
 
-    @skip_or_run_decimal_test
-    def test_tarantool_encode_with_precision_loss(self):
+    def test_msgpack_encode_with_v35_precision_loss(self):
         # pylint: disable=cell-var-from-loop
 
-        for name, case in self.precision_loss_cases.items():
+        for name, case in self.v35_precision_loss_cases.items():
+            with self.subTest(msg=name):
+                msg = 'Decimal encoded with loss of precision: ' + \
+                      'Tarantool decimal supports a maximum of 76 digits.'
+
+                self.assertWarnsRegex(
+                    MsgpackWarning, msg,
+                    lambda: self.assertEqual(
+                        packer_default(
+                            case['python'],
+                            tarantool_version=self.decimal_v35_version_id,
+                        ),
+                        msgpack.ExtType(code=1, data=case['msgpack'])
+                    )
+                )
+
+    @skip_or_run_decimal_test
+    @skip_or_run_decimal_before_3_5_test
+    def test_tarantool_encode_with_legacy_precision_loss(self):
+        # pylint: disable=cell-var-from-loop
+
+        for name, case in self.legacy_precision_loss_cases.items():
             with self.subTest(msg=name):
                 msg = 'Decimal encoded with loss of precision: ' + \
                       'Tarantool decimal supports a maximum of 38 digits.'
@@ -452,21 +688,22 @@ class TestSuiteDecimal(unittest.TestCase):
                 self.assertWarnsRegex(
                     MsgpackWarning, msg,
                     lambda: self.con.insert('test', [name, case['python']]))
+                self.assert_decimal_tuple_equals(name, case['tarantool'])
 
-                lua_eval = f"""
-                    local tuple = box.space['test']:get('{name}')
-                    assert(tuple ~= nil)
+    @skip_or_run_decimal_test
+    @skip_or_run_decimal_3_5_test
+    def test_tarantool_encode_with_v35_precision_loss(self):
+        # pylint: disable=cell-var-from-loop
 
-                    local dec = {case['tarantool']}
-                    if tuple[2] == dec then
-                        return true
-                    else
-                        return nil, ('%s is not equal to expected %s'):format(
-                            tostring(tuple[2]), tostring(dec))
-                    end
-                """
+        for name, case in self.v35_precision_loss_cases.items():
+            with self.subTest(msg=name):
+                msg = 'Decimal encoded with loss of precision: ' + \
+                      'Tarantool decimal supports a maximum of 76 digits.'
 
-                self.assertSequenceEqual(self.con.eval(lua_eval), [True])
+                self.assertWarnsRegex(
+                    MsgpackWarning, msg,
+                    lambda: self.con.insert('test', [name, case['python']]))
+                self.assert_decimal_tuple_equals(name, case['tarantool'])
 
     @skip_or_run_decimal_test
     def test_primary_key(self):
