@@ -78,7 +78,7 @@ def get_int_as_bytes(data, size):
     return data.to_bytes(size, byteorder=BYTEORDER, signed=True)
 
 
-def encode(obj, _):
+def encode(obj, _packer, _tarantool_version):
     """
     Encode a datetime object.
 
@@ -135,7 +135,7 @@ def get_bytes_as_int(data, cursor, size):
     return int.from_bytes(part, BYTEORDER, signed=True), cursor + size
 
 
-def decode(data, _):
+def decode(data, _unpacker, _tarantool_version):
     """
     Decode a datetime object.
 

@@ -21,7 +21,7 @@ EXT_ID = 2
 """
 
 
-def encode(obj, _):
+def encode(obj, _packer, _tarantool_version):
     """
     Encode an UUID object.
 
@@ -35,7 +35,7 @@ def encode(obj, _):
     return obj.bytes
 
 
-def decode(data, _):
+def decode(data, _unpacker, _tarantool_version):
     """
     Decode an UUID object.
 

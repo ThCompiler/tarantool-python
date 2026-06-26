@@ -20,7 +20,7 @@ decoders = {
 }
 
 
-def ext_hook(code, data, unpacker=None):
+def ext_hook(code, data, unpacker=None, tarantool_version=None):
     """
     :class:`msgpack.Unpacker` decoder.
 
@@ -34,6 +34,9 @@ def ext_hook(code, data, unpacker=None):
         (like dictionary in extended error payload)
     :type unpacker: :class:`msgpack.Unpacker`, optional
 
+    :param tarantool_version: Tarantool version identifier.
+    :type tarantool_version: :obj:`int`, optional
+
     :return: Decoded value.
     :rtype: :class:`decimal.Decimal` or :class:`uuid.UUID` or
          or :class:`tarantool.BoxError` or :class:`tarantool.Datetime`
@@ -43,5 +46,5 @@ def ext_hook(code, data, unpacker=None):
     """
 
     if code in decoders:
-        return decoders[code](data, unpacker)
+        return decoders[code](data, unpacker, tarantool_version)
     raise NotImplementedError(f"Unknown msgpack extension type code {code}")

@@ -80,6 +80,44 @@ def skip_or_run_test_tarantool_call(self, required_tt_version, msg):
     skip_or_run_test_tarantool_impl(self, required_tt_version, msg)
 
 
+def skip_or_run_test_tarantool_lt_impl(self, unsupported_tt_version, msg):
+    """
+    Helper to skip or run tests depending on the Tarantool
+    version.
+
+    Skip tests when the Tarantool version is greater than or equal
+    to the provided version.
+    """
+    fetch_tarantool_version(self)
+
+    unsupported_version = pkg_resources.parse_version(unsupported_tt_version)
+
+    if self.tnt_version >= unsupported_version:
+        self.skipTest(f'Tarantool {self.tnt_version} {msg}')
+
+
+def skip_or_run_test_tarantool_lt(func, unsupported_tt_version, msg):
+    """
+    Decorator to skip or run tests depending on the tarantool
+    version.
+
+    Skip tests when the Tarantool version is greater than or equal
+    to the provided version.
+    """
+
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if func.__name__ == 'setUp':
+            func(self, *args, **kwargs)
+
+        skip_or_run_test_tarantool_lt_impl(self, unsupported_tt_version, msg)
+
+        if func.__name__ != 'setUp':
+            func(self, *args, **kwargs)
+
+    return wrapper
+
+
 def skip_or_run_test_pcall_require(func, required_tt_module, msg):
     """
     Decorator to skip or run tests depending on tarantool
@@ -177,6 +215,30 @@ def skip_or_run_decimal_test(func):
 
     return skip_or_run_test_pcall_require(func, 'decimal',
                                           'does not support decimal type')
+
+
+def skip_or_run_decimal_before_3_5_test(func):
+    """
+    Decorator to skip or run decimal-related tests depending on
+    the tarantool version.
+
+    Skips tests on Tarantool 3.5.0 and newer.
+    """
+
+    return skip_or_run_test_tarantool_lt(func, '3.5.0',
+                                         'supports 76-digit decimals')
+
+
+def skip_or_run_decimal_3_5_test(func):
+    """
+    Decorator to skip or run decimal-related tests depending on
+    the tarantool version.
+
+    Skips tests on Tarantool older than 3.5.0.
+    """
+
+    return skip_or_run_test_tarantool(func, '3.5.0',
+                                      'does not support 76-digit decimals')
 
 
 def skip_or_run_uuid_test(func):

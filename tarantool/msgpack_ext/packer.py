@@ -28,7 +28,7 @@ encoders = [
 ]
 
 
-def default(obj, packer=None):
+def default(obj, packer=None, tarantool_version=None):
     """
     :class:`msgpack.Packer` encoder.
 
@@ -41,6 +41,9 @@ def default(obj, packer=None):
         (like dictionary in extended error payload)
     :type packer: :class:`msgpack.Packer`, optional
 
+    :param tarantool_version: Tarantool version identifier.
+    :type tarantool_version: :obj:`int`, optional
+
     :return: Encoded value.
     :rtype: :class:`msgpack.ExtType`
 
@@ -49,5 +52,7 @@ def default(obj, packer=None):
 
     for encoder in encoders:
         if isinstance(obj, encoder['type']):
-            return ExtType(encoder['ext'].EXT_ID, encoder['ext'].encode(obj, packer))
+            return ExtType(
+                encoder['ext'].EXT_ID, encoder['ext'].encode(obj, packer, tarantool_version),
+            )
     raise TypeError(f"Unknown type: {repr(obj)}")
