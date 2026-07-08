@@ -52,7 +52,7 @@ EXT_ID = 6
 """
 
 
-def encode(obj, _packer, _tarantool_version):
+def encode(obj, _):
     """
     Encode an interval object.
 
@@ -81,7 +81,7 @@ def encode(obj, _packer, _tarantool_version):
     return buf
 
 
-def decode(data, unpacker, _tarantool_version):
+def decode(data, unpacker):
     """
     Decode an interval object.
 

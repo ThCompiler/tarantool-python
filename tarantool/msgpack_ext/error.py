@@ -17,7 +17,7 @@ EXT_ID = 3
 """
 
 
-def encode(obj, packer, _tarantool_version):
+def encode(obj, packer):
     """
     Encode an error object.
 
@@ -35,7 +35,7 @@ def encode(obj, packer, _tarantool_version):
     return packer.pack(err_map)
 
 
-def decode(data, unpacker, _tarantool_version):
+def decode(data, unpacker):
     """
     Decode an error object.
 
