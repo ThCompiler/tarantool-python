@@ -3,29 +3,10 @@ Tarantool `extension`_ types encoding support.
 
 .. _extension: https://www.tarantool.io/en/doc/latest/dev_guide/internals/msgpack_extensions/
 """
-# pylint: disable=duplicate-code
 
-from decimal import Decimal
-from uuid import UUID
 from msgpack import ExtType
 
-from tarantool.types import BoxError
-from tarantool.msgpack_ext.types.datetime import Datetime
-from tarantool.msgpack_ext.types.interval import Interval
-
-import tarantool.msgpack_ext.decimal as ext_decimal
-import tarantool.msgpack_ext.uuid as ext_uuid
-import tarantool.msgpack_ext.error as ext_error
-import tarantool.msgpack_ext.datetime as ext_datetime
-import tarantool.msgpack_ext.interval as ext_interval
-
-encoders = [
-    {'type': Decimal, 'ext': ext_decimal},
-    {'type': UUID, 'ext': ext_uuid},
-    {'type': BoxError, 'ext': ext_error},
-    {'type': Datetime, 'ext': ext_datetime},
-    {'type': Interval, 'ext': ext_interval},
-]
+from tarantool.msgpack_ext.extensions import init_msgpack_extensions
 
 
 def default(obj, packer=None, tarantool_version=None):
@@ -50,9 +31,7 @@ def default(obj, packer=None, tarantool_version=None):
     :raise: :exc:`~TypeError`
     """
 
-    for encoder in encoders:
-        if isinstance(obj, encoder['type']):
-            return ExtType(
-                encoder['ext'].EXT_ID, encoder['ext'].encode(obj, packer, tarantool_version),
-            )
+    for ext_id, ext in init_msgpack_extensions(tarantool_version).items():
+        if isinstance(obj, ext.type):
+            return ExtType(ext_id, ext.encode(obj, packer))
     raise TypeError(f"Unknown type: {repr(obj)}")

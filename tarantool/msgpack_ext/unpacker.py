@@ -3,21 +3,7 @@ Tarantool `extension`_ types decoding support.
 
 .. _extension: https://www.tarantool.io/en/doc/latest/dev_guide/internals/msgpack_extensions/
 """
-# pylint: disable=duplicate-code
-
-import tarantool.msgpack_ext.decimal as ext_decimal
-import tarantool.msgpack_ext.uuid as ext_uuid
-import tarantool.msgpack_ext.error as ext_error
-import tarantool.msgpack_ext.datetime as ext_datetime
-import tarantool.msgpack_ext.interval as ext_interval
-
-decoders = {
-    ext_decimal.EXT_ID: ext_decimal.decode,
-    ext_uuid.EXT_ID: ext_uuid.decode,
-    ext_error.EXT_ID: ext_error.decode,
-    ext_datetime.EXT_ID: ext_datetime.decode,
-    ext_interval.EXT_ID: ext_interval.decode,
-}
+from tarantool.msgpack_ext.extensions import init_msgpack_extensions
 
 
 def ext_hook(code, data, unpacker=None, tarantool_version=None):
@@ -44,7 +30,8 @@ def ext_hook(code, data, unpacker=None, tarantool_version=None):
 
     :raise: :exc:`NotImplementedError`
     """
+    ext = init_msgpack_extensions(tarantool_version)
 
-    if code in decoders:
-        return decoders[code](data, unpacker, tarantool_version)
+    if code in ext:
+        return ext[code].decode(data, unpacker)
     raise NotImplementedError(f"Unknown msgpack extension type code {code}")
