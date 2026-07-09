@@ -40,6 +40,7 @@ TARANTOOL_DECIMAL_MAX_DIGITS = 38
 TARANTOOL_DECIMAL_MAX_DIGITS_V35 = 76
 
 
+@functools.lru_cache(maxsize=None)
 def init_msgpack_extensions(tarantool_version=None):
     """
     Initialize MessagePack extension type handlers.
